@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ether Wallet</title>
+  <link rel="stylesheet" href="css/eth.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">
+        <div class="logo-icon">E</div>
+        Ether Wallet
+      </div>
+      <div class="user-menu" id="user-menu">
+        <!-- User menu content will be dynamically inserted here -->
+      </div>
+    </header>
+    
+    <!-- Login/Register Section -->
+    <div id="login-section" class="login-section">
+      <div class="login-header">
+        <h2>Welcome to Ether Wallet</h2>
+        <p>Login or create a new wallet to get started</p>
+      </div>
+      
+      <div class="login-form">
+        <div class="tabs">
+          <div class="tab active" id="login-tab">Login</div>
+          <div class="tab" id="register-tab">Create Wallet</div>
+        </div>
+        
+        <div class="form-content" id="login-form">
+          <div class="form-group">
+            <label for="login-username">Username</label>
+            <input type="text" id="login-username" placeholder="Enter your username">
+          </div>
+          <div class="form-group">
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password" placeholder="Enter your password">
+          </div>
+          <button class="submit-btn" id="login-btn">Login</button>
+        </div>
+        
+        <div class="form-content hidden" id="register-form">
+          <div class="form-group">
+            <label for="register-username">Choose Username</label>
+            <input type="text" id="register-username" placeholder="Create a username">
+          </div>
+          <div class="form-group">
+            <label for="register-password">Create Password</label>
+            <input type="password" id="register-password" placeholder="Create a strong password">
+          </div>
+          <div class="form-group">
+            <label for="confirm-password">Confirm Password</label>
+            <input type="password" id="confirm-password" placeholder="Confirm your password">
+          </div>
+          <button class="submit-btn" id="register-btn">Create Wallet</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Wallet App (Hidden until login) -->
+    <main id="wallet-app" class="wallet-app hidden">
+      <div class="wallet-header">
+        <h2>Your EVM Wallet</h2>
+        <div class="wallet-address">
+          <span id="wallet-address"></span>
+          <button class="copy-btn" onclick="copyAddress()">Copy</button>
+        </div>
+      </div>
+      
+      <div class="balance-section">
+        <h3>Your Balance</h3>
+        <div class="balance">
+          <span id="eth-balance">0.00</span>
+          <span class="eth-symbol">ETH</span>
+        </div>
+        <div class="usd-value">$<span id="usd-value">0.00</span> USD</div>
+        
+        <div class="action-buttons">
+          <button class="action-btn send-btn" onclick="openSendModal()">
+            <span>↑</span> Send
+          </button>
+          <button class="action-btn receive-btn" onclick="openReceiveModal()">
+            <span>↓</span> Receive
+          </button>
+        </div>
+      </div>
+      
+      <div class="transactions">
+        <h3>Recent Transactions</h3>
+        <div id="transactions-list">
+          <!-- Transactions will be dynamically loaded here -->
+        </div>
+      </div>
+    </main>
+  </div>
+  
+  <!-- Send Modal -->
+  <div id="send-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Send ETH</h3>
+        <button class="close-modal" onclick="closeModal('send-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="recipient-address">Recipient Address</label>
+          <input type="text" id="recipient-address" placeholder="0x...">
+        </div>
+        <div class="form-group">
+          <label for="send-amount">Amount (ETH)</label>
+          <input type="number" id="send-amount" step="0.01" placeholder="0.00">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-cancel" onclick="closeModal('send-modal')">Cancel</button>
+        <button class="btn-submit" onclick="sendTransaction()">Send</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Receive Modal -->
+  <div id="receive-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Receive ETH</h3>
+        <button class="close-modal" onclick="closeModal('receive-modal')">&times;</button>
+      </div>
+      <div class="modal-body" style="text-align: center;">
+        <div style="background: #f5f7fa; border-radius: 8px; padding: 20px; margin-bottom: 20px; display: inline-block;">
+          <div style="font-size: 100px; line-height: 1;">Ξ</div>
+        </div>
+        <p>Your Wallet Address:</p>
+        <div class="wallet-address" style="margin: 15px 0;">
+          <span id="receive-address"></span>
+          <button class="copy-btn" style="background: var(--primary);" onclick="copyAddress()">Copy</button>
+        </div>
+        <p style="color: #888; font-size: 14px;">Send only ETH and ERC-20 tokens to this address</p>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Notification -->
+  <div id="notification" class="notification">
+    <div class="notification-icon">✓</div>
+    <div class="notification-message">Address copied to clipboard!</div>
+  </div>
+  
+  <script>
+    // Current ETH price in USD
+    const ethPrice = 1775.61;
+    
+    // User accounts
+    let accounts = {};
+    let currentUser = null;
+    
+    // Load accounts from localStorage
+    function loadAccounts() {
+      const savedAccounts = localStorage.getItem('etherWalletAccounts');
+      if (savedAccounts) {
+        accounts = JSON.parse(savedAccounts);
+      }
+    }
+    
+    // Save accounts to localStorage
+    function saveAccounts() {
+      localStorage.setItem('etherWalletAccounts', JSON.stringify(accounts));
+    }
+    
+    // Generate a random Ethereum address
+    function generateEthAddress() {
+      const chars = '0123456789abcdef';
+      let address = '0x';
+      for (let i = 0; i < 40; i++) {
+        address += chars[Math.floor(Math.random() * chars.length)];
+      }
+      return address;
+    }
+    
+// Modify the updateUI function to include tokens
+function updateUI() {
+  if (currentUser) {
+    document.getElementById('login-section').classList.add('hidden');
+    document.getElementById('wallet-app').classList.remove('hidden');
+    
+    const user = accounts[currentUser];
+    
+    // Update wallet address
+    document.getElementById('wallet-address').textContent = user.address;
+    document.getElementById('receive-address').textContent = user.address;
+    
+    // Update balance
+    document.getElementById('eth-balance').textContent = user.balance.toFixed(2);
+    const usdValue = (user.balance * ethPrice).toFixed(2);
+    document.getElementById('usd-value').textContent = usdValue.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    
+    // Update user menu
+    document.getElementById('user-menu').innerHTML = `
+      <div class="user-display">
+        <div class="user-avatar">${currentUser[0].toUpperCase()}</div>
+        ${currentUser}
+      </div>
+      <button class="user-menu-btn" onclick="logout()">Logout</button>
+    `;
+    
+    // Update transactions list
+    updateTransactionsList();
+    
+    // Update tokens UI
+    updateTokensUI();
+  } else {
+    document.getElementById('login-section').classList.remove('hidden');
+    document.getElementById('wallet-app').classList.add('hidden');
+    
+    // Update user menu
+    document.getElementById('user-menu').innerHTML = '';
+  }
+}
+    // Update transactions list
+    function updateTransactionsList() {
+      const transactionsList = document.getElementById('transactions-list');
+      transactionsList.innerHTML = '';
+      
+      const user = accounts[currentUser];
+      
+      if (user.transactions.length === 0) {
+        transactionsList.innerHTML = '<div class="no-transactions">No transactions yet</div>';
+        return;
+      }
+      
+      // Sort transactions by timestamp (newest first)
+      user.transactions.sort((a, b) => b.timestamp - a.timestamp);
+      
+      for (const tx of user.transactions) {
+        const transaction = document.createElement('div');
+        transaction.className = 'transaction';
+        
+        // Format date
+        const txDate = new Date(tx.timestamp);
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        
+        let dateStr;
+        if (txDate.toDateString() === today.toDateString()) {
+          dateStr = `Today, ${txDate.getHours()}:${txDate.getMinutes().toString().padStart(2, '0')} ${txDate.getHours() >= 12 ? 'PM' : 'AM'}`;
+        } else if (txDate.toDateString() === yesterday.toDateString()) {
+          dateStr = `Yesterday, ${txDate.getHours()}:${txDate.getMinutes().toString().padStart(2, '0')} ${txDate.getHours() >= 12 ? 'PM' : 'AM'}`;
+        } else {
+          dateStr = `${txDate.toLocaleDateString()}, ${txDate.getHours()}:${txDate.getMinutes().toString().padStart(2, '0')} ${txDate.getHours() >= 12 ? 'PM' : 'AM'}`;
+        }
+        
+        transaction.innerHTML = `
+          <div class="tx-icon tx-${tx.type}">${tx.type === 'send' ? '↑' : '↓'}</div>
+          <div class="tx-details">
+            <div>${tx.type === 'send' ? 'Sent' : 'Received'}</div>
+            <div class="tx-address">${tx.address}</div>
+          </div>
+          <div class="tx-info">
+            <div class="tx-amount">${tx.type === 'send' ? '-' : '+'}${tx.amount} ETH</div>
+            <div class="tx-time">${dateStr}</div>
+          </div>
+        `;
+        
+        transactionsList.appendChild(transaction);
+      }
+    }
+    
+    // Register new user
+  // Register new user
+function registerUser() {
+  const username = document.getElementById('register-username').value.trim();
+  const password = document.getElementById('register-password').value;
+  const confirmPassword = document.getElementById('confirm-password').value;
+  
+  // Validate inputs
+  if (!username) {
+    showNotification('Please enter a username', 'error');
+    return;
+  }
+  
+  if (username in accounts) {
+    showNotification('Username already exists', 'error');
+    return;
+  }
+  
+  if (password.length < 6) {
+    showNotification('Password must be at least 6 characters', 'error');
+    return;
+  }
+  
+  if (password !== confirmPassword) {
+    showNotification('Passwords do not match', 'error');
+    return;
+  }
+  
+  // Create new account
+  accounts[username] = {
+    password: password,
+    address: generateEthAddress(),
+    balance: 0,
+    transactions: []
+  };
+  
+  // Initialize tokens for the new user
+  initializeTokens(username);
+  
+  // Save accounts to localStorage
+  saveAccounts();
+  
+  // Login the new user
+  currentUser = username;
+  updateUI();
+  
+  // Add welcome transaction
+  addTransaction('receive', '0xEtherWalletWelcome', 0.5);
+  
+  showNotification('Wallet created successfully! Welcome gift: 0.5 ETH', 'success');
+}
+    
+    // Login user
+    function loginUser() {
+      const username = document.getElementById('login-username').value.trim();
+      const password = document.getElementById('login-password').value;
+      
+      if (!username || !password) {
+        showNotification('Please enter username and password', 'error');
+        return;
+      }
+      
+      if (!(username in accounts)) {
+        showNotification('Username not found', 'error');
+        return;
+      }
+      
+      if (accounts[username].password !== password) {
+        showNotification('Incorrect password', 'error');
+        return;
+      }
+      
+      // Login successful
+      currentUser = username;
+      updateUI();
+      showNotification('Logged in successfully!', 'success');
+    }
+    
+    // Logout user
+    function logout() {
+      currentUser = null;
+      updateUI();
+      
+      // Clear login form
+      document.getElementById('login-username').value = '';
+      document.getElementById('login-password').value = '';
+      
+      showNotification('Logged out successfully', 'success');
+    }
+    
+    // Copy wallet address
+    function copyAddress() {
+      const address = document.getElementById('wallet-address').textContent;
+      navigator.clipboard.writeText(address).then(() => {
+        showNotification('Address copied to clipboard!', 'success');
+      }).catch(err => {
+        showNotification('Failed to copy address', 'error');
+      });
+    }
+    
+    // Open send modal
+    function openSendModal() {
+      document.getElementById('send-modal').style.display = 'flex';
+    }
+    
+    // Open receive modal
+    function openReceiveModal() {
+      document.getElementById('receive-modal').style.display = 'flex';
+    }
+    
+    // Close modal
+    function closeModal(modalId) {
+      document.getElementById(modalId).style.display = 'none';
+    }
+    
+    // Send transaction
+    function sendTransaction() {
+      const recipientAddress = document.getElementById('recipient-address').value;
+      const amount = parseFloat(document.getElementById('send-amount').value);
+      
+      if (!recipientAddress || recipientAddress.length < 40) {
+        showNotification('Please enter a valid Ethereum address', 'error');
+        return;
+      }
+      
+      if (isNaN(amount) || amount <= 0) {
+        showNotification('Please enter a valid amount', 'error');
+        return;
+      }
+      
+      const user = accounts[currentUser];
+      
+      if (amount > user.balance) {
+        showNotification('Insufficient balance', 'error');
+        return;
+      }
+      
+      // Update balance
+      user.balance -= amount;
+      
+      // Add transaction
+      addTransaction('send', recipientAddress, amount);
+      
+      // Close modal and show success notification
+      closeModal('send-modal');
+      showNotification('Transaction sent successfully!', 'success');
+      
+      // Reset form
+      document.getElementById('recipient-address').value = '';
+      document.getElementById('send-amount').value = '';
+    }
+    
+    // Add transaction to history
+    function addTransaction(type, address, amount) {
+      const user = accounts[currentUser];
+      
+      // Add to transactions list
+      user.transactions.push({
+        type: type,
+        address: address,
+        amount: parseFloat(amount),
+        timestamp: Date.now()
+      });
+      
+      // If it's a receive transaction, update balance
+      if (type === 'receive') {
+        user.balance += parseFloat(amount);
+      }
+      
+      // Save to localStorage
+      saveAccounts();
+      
+      // Update UI
+      updateUI();
+    }
+    
+    // Show notification
+    function showNotification(message, type) {
+      const notification = document.getElementById('notification');
+      const notificationMessage = notification.querySelector('.notification-message');
+      
+      // Set message
+      notificationMessage.textContent = message;
+      
+      // Set type
+      notification.className = `notification notification-${type}`;
+      notification.querySelector('.notification-icon').textContent = type === 'success' ? '✓' : '✕';
+      
+      // Show notification
+      notification.classList.add('show');
+      
+      // Hide notification after 3 seconds
+      setTimeout(() => {
+        notification.classList.remove('show');
+      }, 3000);
+    }
+    
+    // Simulate random incoming transaction
+    function simulateIncomingTransaction() {
+      // Only simulate if logged in
+      if (currentUser) {
+        const randomAddresses = [
+          '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
+          '0x2546BcD3c84621e976D8185a91A922aE77ECEc30',
+          '0x84E32A23F8E8177C7ff8c81F5E189d50d21a7524',
+          '0x9e3f9A32251ca5Ae8C4C725b6CA63Cfb17D75Dc1'
+        ];
+        
+        const randomAddress = randomAddresses[Math.floor(Math.random() * randomAddresses.length)];
+        const randomAmount = (Math.random() * 0.5 + 0.1).toFixed(2);
+        
+        // Simulate 20% chance of receiving ETH
+        if (Math.random() < 0.2) {
+          // Add transaction
+          addTransaction('receive', randomAddress, randomAmount);
+          
+          // Show notification
+          showNotification(`Received ${randomAmount} ETH!`, 'success');
+        }
+      }
+      
+      // Schedule next simulation
+      setTimeout(simulateIncomingTransaction, Math.random() * 60000 + 30000); // Between 30s and 90s
+    }
+    
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+      // Load accounts from localStorage
+      loadAccounts();
+      
+      // Setup tab switching
+      document.getElementById('login-tab').addEventListener('click', function() {
+        document.getElementById('login-tab').classList.add('active');
+        document.getElementById('register-tab').classList.remove('active');
+        document.getElementById('login-form').classList.remove('hidden');
+        document.getElementById('register-form').classList.add('hidden');
+      });
+      
+      document.getElementById('register-tab').addEventListener('click', function() {
+        document.getElementById('register-tab').classList.add('active');
+        document.getElementById('login-tab').classList.remove('active');
+        document.getElementById('register-form').classList.remove('hidden');
+        document.getElementById('login-form').classList.add('hidden');
+      });
+      
+      // Setup form submission
+      document.getElementById('login-btn').addEventListener('click', loginUser);
+      document.getElementById('register-btn').addEventListener('click', registerUser);
+      
+      // Initialize UI based on login status
+      updateUI();
+      
+      // Start simulating incoming transactions
+      setTimeout(simulateIncomingTransaction, 60000);
+    });
+
+    // Add this to your script section, before the initialization code
+
+// Sample ERC-20 tokens data
+const tokensList = [
+  { symbol: 'ETH', name: 'Ethereum', decimals: 18, balance: 0, logo: 'Ξ', price: 1775.61 },
+  { symbol: 'USDT', name: 'Tether USD', decimals: 6, balance: 0, logo: '₮', price: 1.00 },
+  { symbol: 'USDC', name: 'USD Coin', decimals: 6, balance: 0, logo: '$', price: 1.00 },
+  { symbol: 'BNB', name: 'Binance Coin', decimals: 18, balance: 0, logo: 'B', price: 226.30 },
+  { symbol: 'DAI', name: 'Dai Stablecoin', decimals: 18, balance: 0, logo: 'D', price: 1.00 }
+];
+
+// Add token data to user accounts
+function initializeTokens(username) {
+  if (!accounts[username].tokens) {
+    accounts[username].tokens = JSON.parse(JSON.stringify(tokensList));
+    // Give some sample tokens to new users
+    accounts[username].tokens[1].balance = 100; // 100 USDT
+    accounts[username].tokens[2].balance = 50;  // 50 USDC
+    accounts[username].tokens[4].balance = 75;  // 75 DAI
+    
+    // Set ETH balance
+    accounts[username].tokens[0].balance = accounts[username].balance;
+    
+    saveAccounts();
+  }
+}
+
+// Update the UI to show tokens
+function updateTokensUI() {
+  if (!currentUser) return;
+  
+  // Make sure tokens are initialized
+  initializeTokens(currentUser);
+  
+  // Update ETH balance in tokens list to match main balance
+  accounts[currentUser].tokens[0].balance = accounts[currentUser].balance;
+  
+  // Create tokens section if it doesn't exist
+  if (!document.getElementById('tokens-section')) {
+    const tokensSection = document.createElement('div');
+    tokensSection.id = 'tokens-section';
+    tokensSection.className = 'tokens-section';
+    
+    // Insert tokens section before transactions
+    const transactionsSection = document.querySelector('.transactions');
+    transactionsSection.parentNode.insertBefore(tokensSection, transactionsSection);
+    
+    // Add tokens section header
+    tokensSection.innerHTML = `
+      <h3>Your Tokens</h3>
+      <div class="tokens-list" id="tokens-list"></div>
+      <div class="action-buttons" style="margin-top:15px;">
+        <button class="action-btn" onclick="openSwapModal()">
+          <span>↺</span> Swap Tokens
+        </button>
+      </div>
+    `;
+    
+    // Add CSS for tokens section
+    const style = document.createElement('style');
+    style.textContent = `
+      .tokens-section {
+        padding: 20px 30px;
+        border-top: 1px solid #eee;
+      }
+      
+      .tokens-list {
+        margin-top: 15px;
+      }
+      
+      .token-item {
+        display: flex;
+        align-items: center;
+        padding: 12px;
+        border-radius: 8px;
+        background: #f8f9fa;
+        margin-bottom: 10px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      
+      .token-item:hover {
+        background: #f0f2f5;
+      }
+      
+      .token-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: var(--primary);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        margin-right: 12px;
+      }
+      
+      .token-details {
+        flex-grow: 1;
+      }
+      
+      .token-symbol {
+        font-weight: bold;
+      }
+      
+      .token-name {
+        font-size: 12px;
+        color: #666;
+      }
+      
+      .token-balance {
+        text-align: right;
+      }
+      
+      .token-value {
+        font-size: 12px;
+        color: #666;
+      }
+      
+      /* Token Selection Modal */
+      .token-select-list {
+        max-height: 300px;
+        overflow-y: auto;
+        margin-bottom: 15px;
+      }
+      
+      .token-select-item {
+        display: flex;
+        align-items: center;
+        padding: 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      
+      .token-select-item:hover {
+        background: #f0f2f5;
+      }
+      
+      .swap-form {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+      }
+      
+      .swap-input-container {
+        position: relative;
+        display: flex;
+        align-items: center;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+        overflow: hidden;
+      }
+      
+      .swap-amount {
+        flex-grow: 1;
+        border: none;
+        padding: 12px;
+        font-size: 16px;
+      }
+      
+      .swap-amount:focus {
+        outline: none;
+      }
+      
+      .swap-token-selector {
+        background: #f0f2f5;
+        padding: 12px;
+        cursor: pointer;
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      
+      .swap-divider {
+        position: relative;
+        display: flex;
+        justify-content: center;
+        height: 40px;
+        margin: 5px 0;
+      }
+      
+      .swap-arrow {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: var(--primary);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        cursor: pointer;
+        z-index: 1;
+      }
+      
+      .swap-divider::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: #ddd;
+      }
+      
+      .swap-preview {
+        background: #f8f9fa;
+        padding: 12px;
+        border-radius: 8px;
+        margin-top: 10px;
+        font-size: 14px;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  
+  // Update tokens list
+  const tokensList = document.getElementById('tokens-list');
+  tokensList.innerHTML = '';
+  
+  // Add each token
+  accounts[currentUser].tokens.forEach((token, index) => {
+    const tokenItem = document.createElement('div');
+    tokenItem.className = 'token-item';
+    tokenItem.setAttribute('data-token-index', index);
+    tokenItem.onclick = function() { openSendTokenModal(index); };
+    
+    // Calculate USD value
+    const usdValue = (token.balance * token.price).toFixed(2);
+    
+    tokenItem.innerHTML = `
+      <div class="token-icon">${token.logo}</div>
+      <div class="token-details">
+        <div class="token-symbol">${token.symbol}</div>
+        <div class="token-name">${token.name}</div>
+      </div>
+      <div class="token-info">
+        <div class="token-balance">${token.balance.toFixed(token.symbol === 'USDT' || token.symbol === 'USDC' ? 2 : 4)} ${token.symbol}</div>
+        <div class="token-value">$${usdValue.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} USD</div>
+      </div>
+    `;
+    
+    tokensList.appendChild(tokenItem);
+  });
+  
+  saveAccounts();
+}
+
+// Update user accounts
+function updateUser() {
+  saveAccounts();
+  updateUI();
+  updateTokensUI();
+}
+
+// Add token transaction
+function addTokenTransaction(tokenIndex, type, address, amount) {
+  if (!currentUser) return;
+  
+  const token = accounts[currentUser].tokens[tokenIndex];
+  
+  // Initialize token transactions array if it doesn't exist
+  if (!accounts[currentUser].tokenTransactions) {
+    accounts[currentUser].tokenTransactions = [];
+  }
+  
+  // Add transaction
+  accounts[currentUser].tokenTransactions.push({
+    token: token.symbol,
+    type: type,
+    address: address,
+    amount: parseFloat(amount),
+    timestamp: Date.now()
+  });
+  
+  // Update token balance
+  if (type === 'receive') {
+    token.balance += parseFloat(amount);
+  } else if (type === 'send') {
+    token.balance -= parseFloat(amount);
+  }
+  
+  // Update ETH balance if token is ETH
+  if (token.symbol === 'ETH') {
+    accounts[currentUser].balance = token.balance;
+  }
+  
+  updateUser();
+}
+
+// Open send token modal
+function openSendTokenModal(tokenIndex) {
+  if (!document.getElementById('send-token-modal')) {
+    // Create modal
+    const sendTokenModal = document.createElement('div');
+    sendTokenModal.id = 'send-token-modal';
+    sendTokenModal.className = 'modal';
+    
+    sendTokenModal.innerHTML = `
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Send Token</h3>
+          <button class="close-modal" onclick="closeModal('send-token-modal')">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Token</label>
+            <div id="sending-token-info" style="display: flex; align-items: center; gap: 10px; padding: 10px; background: #f8f9fa; border-radius: 8px; margin-bottom: 10px;">
+              <div class="token-icon"></div>
+              <div>
+                <div class="token-symbol" style="font-weight: bold;"></div>
+                <div class="token-balance"></div>
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="token-recipient-address">Recipient Address</label>
+            <input type="text" id="token-recipient-address" placeholder="0x...">
+          </div>
+          <div class="form-group">
+            <label for="token-send-amount">Amount</label>
+            <input type="number" id="token-send-amount" step="0.01" placeholder="0.00">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" onclick="closeModal('send-token-modal')">Cancel</button>
+          <button class="btn-submit" id="send-token-btn">Send</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(sendTokenModal);
+  }
+  
+  // Get token data
+  const token = accounts[currentUser].tokens[tokenIndex];
+  
+  // Update modal with token info
+  const tokenInfo = document.getElementById('sending-token-info');
+  tokenInfo.querySelector('.token-icon').textContent = token.logo;
+  tokenInfo.querySelector('.token-symbol').textContent = token.symbol;
+  tokenInfo.querySelector('.token-balance').textContent = `Balance: ${token.balance.toFixed(token.symbol === 'USDT' || token.symbol === 'USDC' ? 2 : 4)} ${token.symbol}`;
+  
+  // Set up send button
+  const sendButton = document.getElementById('send-token-btn');
+  sendButton.onclick = function() { sendToken(tokenIndex); };
+  
+  // Display the modal
+  document.getElementById('send-token-modal').style.display = 'flex';
+}
+
+// Send token
+function sendToken(tokenIndex) {
+  const token = accounts[currentUser].tokens[tokenIndex];
+  const recipientAddress = document.getElementById('token-recipient-address').value;
+  const amount = parseFloat(document.getElementById('token-send-amount').value);
+  
+  if (!recipientAddress || recipientAddress.length < 40) {
+    showNotification('Please enter a valid Ethereum address', 'error');
+    return;
+  }
+  
+  if (isNaN(amount) || amount <= 0) {
+    showNotification('Please enter a valid amount', 'error');
+    return;
+  }
+  
+  if (amount > token.balance) {
+    showNotification(`Insufficient ${token.symbol} balance`, 'error');
+    return;
+  }
+  
+  // Add transaction
+  addTokenTransaction(tokenIndex, 'send', recipientAddress, amount);
+  
+  // Close modal and show success notification
+  closeModal('send-token-modal');
+  showNotification(`${amount.toFixed(4)} ${token.symbol} sent successfully!`, 'success');
+  
+  // Reset form
+  document.getElementById('token-recipient-address').value = '';
+  document.getElementById('token-send-amount').value = '';
+}
+
+// Create and open the swap modal
+function openSwapModal() {
+  if (!document.getElementById('swap-modal')) {
+    // Create swap modal
+    const swapModal = document.createElement('div');
+    swapModal.id = 'swap-modal';
+    swapModal.className = 'modal';
+    
+    swapModal.innerHTML = `
+      <div class="modal-content" style="width: 450px;">
+        <div class="modal-header">
+          <h3>Swap Tokens</h3>
+          <button class="close-modal" onclick="closeModal('swap-modal')">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="swap-form">
+            <div class="swap-input-container">
+              <input type="number" id="from-amount" class="swap-amount" placeholder="0.00" oninput="updateSwapPreview()">
+              <div class="swap-token-selector" id="from-token-selector" onclick="openTokenSelect('from')">
+                <span id="from-token-icon"></span>
+                <span id="from-token-symbol"></span>
+              </div>
+            </div>
+            
+            <div class="swap-divider">
+              <div class="swap-arrow" onclick="swapTokens()">↑↓</div>
+            </div>
+            
+            <div class="swap-input-container">
+              <input type="number" id="to-amount" class="swap-amount" placeholder="0.00" readonly>
+              <div class="swap-token-selector" id="to-token-selector" onclick="openTokenSelect('to')">
+                <span id="to-token-icon"></span>
+                <span id="to-token-symbol"></span>
+              </div>
+            </div>
+            
+            <div class="swap-preview" id="swap-preview"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" onclick="closeModal('swap-modal')">Cancel</button>
+          <button class="btn-submit" id="swap-btn" onclick="executeSwap()">Swap</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(swapModal);
+    
+    // Create token selection modal
+    const tokenSelectModal = document.createElement('div');
+    tokenSelectModal.id = 'token-select-modal';
+    tokenSelectModal.className = 'modal';
+    
+    tokenSelectModal.innerHTML = `
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Select Token</h3>
+          <button class="close-modal" onclick="closeModal('token-select-modal')">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="token-select-list" id="token-select-list"></div>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(tokenSelectModal);
+  }
+  
+  // Initialize swap with default tokens
+  initializeSwap(0, 1); // ETH to USDT by default
+  
+  // Display the modal
+  document.getElementById('swap-modal').style.display = 'flex';
+}
+
+// Initialize swap modal with selected tokens
+function initializeSwap(fromIndex, toIndex) {
+  const fromToken = accounts[currentUser].tokens[fromIndex];
+  const toToken = accounts[currentUser].tokens[toIndex];
+  
+  // Update UI elements
+  document.getElementById('from-token-icon').textContent = fromToken.logo;
+  document.getElementById('from-token-symbol').textContent = fromToken.symbol;
+  document.getElementById('to-token-icon').textContent = toToken.logo;
+  document.getElementById('to-token-symbol').textContent = toToken.symbol;
+  
+  // Store selected token indices
+  document.getElementById('from-token-selector').setAttribute('data-token-index', fromIndex);
+  document.getElementById('to-token-selector').setAttribute('data-token-index', toIndex);
+  
+  // Reset amounts
+  document.getElementById('from-amount').value = '';
+  document.getElementById('to-amount').value = '';
+  
+  // Update preview
+  updateSwapPreview();
+}
+
+// Swap the selected tokens
+function swapTokens() {
+  const fromIndex = parseInt(document.getElementById('from-token-selector').getAttribute('data-token-index'));
+  const toIndex = parseInt(document.getElementById('to-token-selector').getAttribute('data-token-index'));
+  
+  initializeSwap(toIndex, fromIndex);
+}
+
+// Open token selection modal
+function openTokenSelect(type) {
+  // Store the target type (from/to)
+  document.getElementById('token-select-modal').setAttribute('data-target', type);
+  
+  // Get current selected tokens
+  const fromIndex = parseInt(document.getElementById('from-token-selector').getAttribute('data-token-index'));
+  const toIndex = parseInt(document.getElementById('to-token-selector').getAttribute('data-token-index'));
+  
+  // Populate token list
+  const tokenSelectList = document.getElementById('token-select-list');
+  tokenSelectList.innerHTML = '';
+  
+  accounts[currentUser].tokens.forEach((token, index) => {
+    // Skip already selected token on the other side of the swap
+    if ((type === 'from' && index === toIndex) || (type === 'to' && index === fromIndex)) {
+      return;
+    }
+    
+    const tokenItem = document.createElement('div');
+    tokenItem.className = 'token-select-item';
+    tokenItem.onclick = function() { selectToken(type, index); };
+    
+    tokenItem.innerHTML = `
+      <div class="token-icon" style="margin-right: 10px;">${token.logo}</div>
+      <div style="flex-grow: 1;">
+        <div style="font-weight: bold;">${token.symbol}</div>
+        <div style="font-size: 12px; color: #666;">${token.name}</div>
+      </div>
+      <div style="text-align: right;">
+        <div>${token.balance.toFixed(token.symbol === 'USDT' || token.symbol === 'USDC' ? 2 : 4)}</div>
+      </div>
+    `;
+    
+    tokenSelectList.appendChild(tokenItem);
+  });
+  
+  // Display the modal
+  document.getElementById('token-select-modal').style.display = 'flex';
+}
+
+// Select a token from the token selection modal
+function selectToken(type, index) {
+  // Get the other selected token
+  const fromIndex = parseInt(document.getElementById('from-token-selector').getAttribute('data-token-index'));
+  const toIndex = parseInt(document.getElementById('to-token-selector').getAttribute('data-token-index'));
+  
+  if (type === 'from') {
+    initializeSwap(index, toIndex);
+  } else {
+    initializeSwap(fromIndex, index);
+  }
+  
+  // Close token selection modal
+  closeModal('token-select-modal');
+}
+
+// Update swap preview
+function updateSwapPreview() {
+  const fromAmount = parseFloat(document.getElementById('from-amount').value) || 0;
+  const fromIndex = parseInt(document.getElementById('from-token-selector').getAttribute('data-token-index'));
+  const toIndex = parseInt(document.getElementById('to-token-selector').getAttribute('data-token-index'));
+  
+  const fromToken = accounts[currentUser].tokens[fromIndex];
+  const toToken = accounts[currentUser].tokens[toIndex];
+  
+  // Calculate exchange rate and estimated amount
+  // In a real app, you'd get this from an API
+  const fromValue = fromAmount * fromToken.price;
+  const toAmount = fromValue / toToken.price;
+  
+  // Apply a small fee (0.3%)
+  const fee = fromValue * 0.003;
+  const finalToAmount = (fromValue - fee) / toToken.price;
+  
+  // Update to amount
+  document.getElementById('to-amount').value = finalToAmount.toFixed(6);
+  
+  // Update preview
+  const swapPreview = document.getElementById('swap-preview');
+  
+  if (fromAmount <= 0) {
+    swapPreview.innerHTML = 'Enter an amount to see swap details';
+    return;
+  }
+  
+  if (fromAmount > fromToken.balance) {
+    swapPreview.innerHTML = `<span style="color: var(--danger);">Insufficient ${fromToken.symbol} balance</span>`;
+    return;
+  }
+  
+  const exchangeRate = (fromToken.price / toToken.price).toFixed(6);
+  
+  swapPreview.innerHTML = `
+    <div style="margin-bottom: 8px;">
+      <div style="display: flex; justify-content: space-between;">
+        <span>Exchange Rate:</span>
+        <span>1 ${fromToken.symbol} ≈ ${exchangeRate} ${toToken.symbol}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between;">
+        <span>Fee (0.3%):</span>
+        <span>$${fee.toFixed(2)}</span>
+      </div>
+    </div>
+    <div style="font-weight: bold;">
+      You will receive approximately ${finalToAmount.toFixed(6)} ${toToken.symbol}
+    </div>
+  `;
+}
+
+// Execute the token swap
+function executeSwap() {
+  const fromAmount = parseFloat(document.getElementById('from-amount').value);
+  const toAmount = parseFloat(document.getElementById('to-amount').value);
+  const fromIndex = parseInt(document.getElementById('from-token-selector').getAttribute('data-token-index'));
+  const toIndex = parseInt(document.getElementById('to-token-selector').getAttribute('data-token-index'));
+  
+  const fromToken = accounts[currentUser].tokens[fromIndex];
+  const toToken = accounts[currentUser].tokens[toIndex];
+  
+  // Validate
+  if (isNaN(fromAmount) || fromAmount <= 0) {
+    showNotification('Please enter a valid amount', 'error');
+    return;
+  }
+  
+  if (fromAmount > fromToken.balance) {
+    showNotification(`Insufficient ${fromToken.symbol} balance`, 'error');
+    return;
+  }
+  
+  // Execute swap
+  fromToken.balance -= fromAmount;
+  toToken.balance += toAmount;
+  
+  // Update ETH balance if necessary
+  if (fromToken.symbol === 'ETH') {
+    accounts[currentUser].balance = fromToken.balance;
+  } else if (toToken.symbol === 'ETH') {
+    accounts[currentUser].balance = toToken.balance;
+  }
+  
+  // Add swap transactions
+  if (!accounts[currentUser].swaps) {
+    accounts[currentUser].swaps = [];
+  }
+  
+  accounts[currentUser].swaps.push({
+    fromToken: fromToken.symbol,
+    toToken: toToken.symbol,
+    fromAmount: fromAmount,
+    toAmount: toAmount,
+    timestamp: Date.now()
+  });
+  
+  // Close modal and show success notification
+  closeModal('swap-modal');
+  showNotification(`Swapped ${fromAmount.toFixed(4)} ${fromToken.symbol} for ${toAmount.toFixed(4)} ${toToken.symbol}`, 'success');
+  
+  // Update UI
+  updateUser();
+}
+  </script>
+</body>
+</html>
